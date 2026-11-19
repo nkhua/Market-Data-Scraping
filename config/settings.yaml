@@ -1,0 +1,230 @@
+# Application-level runtime controls.
+app:
+  # Friendly app name used in logs and startup messages.
+  app_name: "trading_bot"
+  # Default mode is research-only. No orders are submitted in this mode.
+  trading_mode: "research_only"
+  # Live trading stays disabled unless explicitly enabled by environment and config.
+  enable_live_trading: false
+  # Runtime environment. Keep "paper" unless you intentionally want live trading.
+  environment: "paper"
+  # When true, all broker activity is paper-trading only.
+  paper_trading: true
+  # When true, orders are simulated and never sent to IBKR.
+  dry_run: true
+  # Timezone used for logs and schedule interpretation.
+  timezone: "America/Toronto"
+  # SQLite path for local state and trade journal storage.
+  state_db_path: "data/trading_bot.sqlite3"
+  # Base log verbosity.
+  log_level: "INFO"
+  # How long to keep journal data before archival/cleanup tooling is added.
+  journal_retention_days: 180
+
+# Explicitly configured tradable universe. Empty lists mean no instruments are scanned.
+universe:
+  stock_symbols: []
+  etf_symbols: []
+  option_contracts: []
+  future_contracts: []
+  forex_pairs: []
+  crypto_symbols: []
+  bond_contracts: []
+
+# Multi-asset research controls. Providers must be real integrations; blank means data unavailable.
+research:
+  allowed_asset_classes:
+    - "stock"
+    - "etf"
+  market_data_provider: ""
+  news_data_provider: ""
+  all_stocks_universe_enabled: true
+  all_stocks_include_etfs: false
+  # 0 means no symbol cap. Use a small value only for local smoke checks.
+  all_stocks_max_symbols: 0
+  all_stocks_request_timeout_seconds: 10
+  news_focus_enabled: false
+  news_focus_topics:
+    - "financial_markets"
+    - "earnings"
+    - "mergers_and_acquisitions"
+    - "ipo"
+    - "economy_macro"
+    - "economy_monetary"
+  news_focus_lookback_minutes: 1440
+  news_focus_max_articles: 50
+  news_focus_max_symbols: 25
+  news_per_symbol_limit: 5
+  news_min_relevance_score: 0.15
+  news_request_timeout_seconds: 10
+  ibkr_stock_scanner_enabled: false
+  ibkr_stock_scanner_codes:
+    - "HOT_BY_VOLUME"
+    - "TOP_PERC_GAIN"
+  ibkr_stock_scanner_location_code: "STK.US.MAJOR"
+  ibkr_stock_scanner_max_results: 25
+  historical_duration: "3 M"
+  historical_bar_size: "1 day"
+  max_candidates_for_claude: 10
+  max_data_age_seconds: 900
+  min_liquidity_threshold: 0.50
+  allow_options: false
+  allow_futures: false
+  allow_forex: false
+  allow_crypto: false
+  allow_shorting: false
+  allow_naked_options: false
+
+# Dynamic discovery / ingestion settings.
+discovery:
+  # How often the scheduled discovery cycle runs, in seconds.
+  frequency_seconds: 300
+  # "broad" lets providers search widely. "watchlist_anchored" lets providers use the base universe as anchors.
+  mode: "broad"
+  # Optional anchor universe for providers that need a starting list.
+  base_universe_symbols: []
+  # Discovery sources enabled in the legacy main path.
+  enabled_sources: []
+  # Max merged candidates kept after evidence reduction each cycle.
+  max_discovered_candidates_per_cycle: 100
+  # Max viable candidates passed to Claude after deterministic filters.
+  max_candidates_for_claude: 10
+  # Weight assigned to each source type during urgency scoring.
+  source_weights:
+    news: 1.0
+    earnings: 0.8
+    mover: 1.1
+    volatility: 1.0
+    filing: 0.7
+    catalyst: 0.7
+  # Minimum news-search relevance needed before headline evidence is accepted.
+  headline_min_relevance_score: 0.70
+  # Threshold for unusual-move discovery sources.
+  unusual_move_pct: 0.03
+  # Threshold for volatility-spike discovery sources.
+  volatility_trigger_threshold: 1.20
+  # Number of days ahead that earnings discovery sources should care about.
+  earnings_window_days: 7
+  # When true, enable filings discovery sources if a provider is configured.
+  include_filings: false
+  # When true, enable catalyst-page discovery sources if a provider is configured.
+  include_catalyst_pages: false
+
+# Deterministic rules/filter layer settings.
+filters:
+  # Reject symbols trading below this price.
+  min_price: 5.0
+  # Reject symbols with spreads wider than this percentage of last price.
+  max_spread_pct: 0.005
+  # Reject symbols with lower average daily volume than this.
+  min_average_volume: 1000000
+  # Reject entries too close to earnings by this many days.
+  earnings_blackout_days: 2
+  # Fast moving-average period used by the trend filter.
+  trend_fast_ma_period: 20
+  # Slow moving-average period used by the trend filter.
+  trend_slow_ma_period: 50
+  # When true, require price to be above the fast moving average.
+  require_price_above_fast_ma: true
+
+# Hard risk engine settings.
+risk:
+  # Maximum account equity risked on a single trade.
+  max_risk_per_trade_pct: 0.005
+  # Maximum notional exposure allowed for any single new position.
+  max_position_exposure_pct: 0.15
+  # Maximum total portfolio exposure allowed across positions and open orders.
+  max_portfolio_exposure_pct: 0.50
+  # Maximum number of concurrent open positions.
+  max_open_positions: 6
+  # Maximum new exposure allowed to be opened in one day.
+  max_daily_new_exposure_pct: 0.20
+  # Sector concentration cap.
+  max_sector_exposure_pct: 0.25
+  # Maximum account equity allowed as margin usage.
+  max_margin_usage_pct: 0.50
+  # Default stop-loss distance below entry for long trades.
+  stop_loss_pct: 0.03
+  # Default take-profit distance above entry for long trades.
+  take_profit_pct: 0.06
+  # Minimum planned reward divided by planned risk before a trade can pass hard risk.
+  min_reward_to_risk: 1.5
+  # Optional symbol allowlist. Leave empty to allow any discovered symbol.
+  allowed_symbols: []
+  # Position sizing mode. Use fixed_fractional for risk-based sizing.
+  position_sizing_method: "fixed_fractional"
+  # When true, every trade must have a deterministic stop before approval.
+  require_hard_stop: true
+
+# Claude analyst layer settings.
+claude:
+  # Master switch for LLM review. When false, the pipeline skips Claude entirely.
+  enabled: true
+  # Claude model name to call for analyst reviews.
+  model: "claude-sonnet-4-6"
+  # Timeout for Claude requests in seconds.
+  timeout_seconds: 20
+  # Minimum confidence needed before an "allow" can remain an allow.
+  min_confidence_for_allow: 0.60
+  # Output token budget for Claude responses.
+  max_tokens: 1600
+
+# Tiered autonomy engine settings.
+autonomy:
+  # When true, qualifying trades may be auto-executed after all checks pass.
+  auto_execute_enabled: true
+  # When true, auto-execution always requires a valid analyst review.
+  require_analyst_for_auto_execute: true
+  # When true, even approval-required trades need an analyst review first.
+  require_analyst_for_approval: false
+  # Minimum analyst confidence for deterministic auto-execution.
+  auto_execute_min_confidence: 0.85
+  # Minimum analyst confidence for a trade to reach the manual review queue.
+  approval_required_min_confidence: 0.55
+  # Catalyst types allowed to auto-execute.
+  auto_execute_allowed_catalysts:
+    - "momentum"
+    - "headline"
+  # Catalyst types allowed to enter the manual review queue.
+  approval_required_allowed_catalysts:
+    - "momentum"
+    - "headline"
+    - "earnings"
+    - "volatility"
+    - "other"
+  # Conviction buckets allowed to auto-execute.
+  auto_execute_allowed_conviction_buckets:
+    - "high"
+  # Conviction buckets allowed to enter the manual review queue.
+  approval_required_allowed_conviction_buckets:
+    - "low"
+    - "medium"
+    - "high"
+  # Analyst risk tags that force a hard block.
+  blocked_risk_tags:
+    - "data_missing"
+    - "regulatory_halt"
+    - "accounting_red_flag"
+  # Analyst risk tags that force manual approval instead of auto-execution.
+  approval_required_risk_tags:
+    - "earnings_uncertainty"
+    - "macro_event"
+    - "gap_risk"
+    - "headline_uncertainty"
+  # Number of consecutive losses that downgrades autonomy by one tier.
+  downgrade_after_losing_streak: 3
+  # Daily drawdown percentage that downgrades autonomy by one tier.
+  downgrade_daily_drawdown_pct: 0.02
+  # Total drawdown percentage that shuts trading down entirely.
+  shutdown_total_drawdown_pct: 0.10
+
+# Broker connection settings.
+broker:
+  # IBKR host, usually TWS or Gateway on localhost.
+  host: "127.0.0.1"
+  # IBKR API port. 7497 is common for paper trading.
+  port: 7497
+  # Client ID used by the IBKR API session.
+  client_id: 101
+  # Broker account identifier. Set this from IBKR_ACCOUNT_ID when account context is needed.
+  account_id: ""
